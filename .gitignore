@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packaging and build output
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+
+# Test, coverage, and lint caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Downloaded datasets and generated artifacts
+data/
+outputs/
+checkpoints/
+logs/
+*.ckpt
+*.checkpoint
+*.h5
+*.keras
+*.npy
+*.npz
+
+# TensorBoard
+runs/
+events.out.tfevents.*
+
+# Editors and operating systems
+.idea/
+.DS_Store
+Thumbs.db
