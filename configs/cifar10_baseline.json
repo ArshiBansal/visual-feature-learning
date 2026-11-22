@@ -1,0 +1,162 @@
+{
+  "config_version": 1,
+  "project": {
+    "name": "visual-feature-learning",
+    "description": "Pure-NumPy CNN baseline for CIFAR-10",
+    "seed": 42
+  },
+  "dataset": {
+    "name": "cifar10",
+    "loader": "tensorflow.keras.datasets.cifar10",
+    "download_at_runtime": true,
+    "allow_subsampling": false,
+    "expected_train_samples": 50000,
+    "expected_test_samples": 10000,
+    "num_classes": 10,
+    "class_names": [
+      "airplane",
+      "automobile",
+      "bird",
+      "cat",
+      "deer",
+      "dog",
+      "frog",
+      "horse",
+      "ship",
+      "truck"
+    ],
+    "input_shape": [
+      3,
+      32,
+      32
+    ],
+    "source_layout": "NHWC",
+    "model_layout": "NCHW",
+    "normalization": {
+      "method": "channel_mean_std",
+      "mean": [
+        0.4914,
+        0.4822,
+        0.4465
+      ],
+      "std": [
+        0.247,
+        0.243,
+        0.261
+      ],
+      "scale_uint8_to_0_1": true
+    },
+    "augmentation": {
+      "horizontal_flip": true
+    }
+  },
+  "model": {
+    "name": "two_stage_cnn",
+    "implementation": "numpy",
+    "convolution": {
+      "operation": "cross_correlation",
+      "stride": 1,
+      "padding": "same",
+      "weight_initializer": "he_normal",
+      "bias_initializer": "zeros"
+    },
+    "layers": [
+      {
+        "type": "conv2d",
+        "in_channels": 3,
+        "out_channels": 16,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": "same"
+      },
+      {
+        "type": "relu"
+      },
+      {
+        "type": "max_pool2d",
+        "pool_size": 2,
+        "stride": 2
+      },
+      {
+        "type": "conv2d",
+        "in_channels": 16,
+        "out_channels": 32,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": "same"
+      },
+      {
+        "type": "relu"
+      },
+      {
+        "type": "max_pool2d",
+        "pool_size": 2,
+        "stride": 2
+      },
+      {
+        "type": "flatten"
+      },
+      {
+        "type": "dense",
+        "in_features": 512,
+        "out_features": 10,
+        "weight_initializer": "he_normal",
+        "bias_initializer": "zeros"
+      }
+    ],
+    "output": {
+      "type": "logits",
+      "loss": "cross_entropy_with_logits"
+    }
+  },
+  "training": {
+    "epochs": 20,
+    "batch_size": 64,
+    "shuffle_each_epoch": true,
+    "drop_last_batch": false,
+    "optimizer": {
+      "name": "sgd",
+      "learning_rate": 0.01,
+      "momentum": 0.9,
+      "weight_decay": 0.0005
+    },
+    "learning_rate_schedule": {
+      "name": "step_decay",
+      "milestones": [
+        10,
+        15
+      ],
+      "gamma": 0.1
+    },
+    "metrics": [
+      "loss",
+      "accuracy"
+    ],
+    "log_every_n_batches": 100,
+    "checkpoint_every_epoch": true
+  },
+  "evaluation": {
+    "evaluate_official_test_split": true,
+    "test_evaluation_frequency": "after_training",
+    "metrics": [
+      "accuracy",
+      "per_class_accuracy",
+      "confusion_matrix"
+    ]
+  },
+  "artifacts": {
+    "output_dir": "outputs/cifar10_baseline",
+    "checkpoint_dir": "checkpoints/cifar10_baseline",
+    "save_training_history": true,
+    "save_final_metrics": true
+  },
+  "visualization": {
+    "notebooks": {
+      "include_2d": true,
+      "include_3d": true
+    },
+    "streamlit": {
+      "visualization_mode": "3d_only"
+    }
+  }
+}
