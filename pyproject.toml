@@ -5,11 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "visual-feature-learning"
 version = "0.1.0"
-description = "A convolutional neural network implemented from scratch with NumPy."
+description = "A pure-NumPy convolutional neural network trained and evaluated on CIFAR-10."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "MIT"
 dependencies = [
-    "numpy>=1.26,<3",
+    "numpy>=1.26,<2",
     "matplotlib>=3.8",
     "pandas>=2.1",
     "plotly>=5.18",
@@ -18,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 datasets = [
-    "tensorflow>=2.16",
+    "tensorflow>=2.16,<3",
 ]
 notebooks = [
     "jupyter>=1.0",
@@ -43,16 +44,8 @@ line-length = 100
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-select = [
-    "E",    # pycodestyle errors
-    "F",    # Pyflakes
-    "I",    # import sorting
-    "B",    # common bug patterns
-    "UP",   # modern Python syntax
-]
-ignore = [
-    "E501", # line length is handled by the formatter
-]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

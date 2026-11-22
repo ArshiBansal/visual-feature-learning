@@ -41,18 +41,21 @@ data/
 outputs/
 checkpoints/
 logs/
+runs/
 *.ckpt
 *.checkpoint
 *.h5
 *.keras
 *.npy
 *.npz
-
-# TensorBoard
-runs/
+*.pt
+*.pth
+*.tflite
+*.onnx
 events.out.tfevents.*
 
 # Editors and operating systems
 .idea/
+.vscode/
 .DS_Store
 Thumbs.db
