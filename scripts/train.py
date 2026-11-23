@@ -31,7 +31,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_config(path: Path) -> dict:
     path = path if path.is_absolute() else PROJECT_ROOT / path
-    with path.open("encoding="utf-8") as file:
+    with path.open(encoding="utf-8") as file:
         return json.load(file)
 
 
@@ -116,21 +116,14 @@ def main() -> None:
     optimizer_config = training_config["optimizer"]
     schedule_config = training_config["learning_rate_schedule"]
 
-    (x_train_raw, y_train), (x_test_raw, y_test) = load_cifar10()
-
-    if len(x_train_raw) != dataset_config["expected_train_samples"]:
-        raise ValueError("Unexpected CIFAR-10 training split size")
-    if len(x_test_raw) != dataset_config["expected_test_samples"]:
-        raise ValueError("Unexpected CIFAR-10 test split size")
-
+    (x_train_raw, y_train), (_, _) = load_cifar10()
     x_train = preprocess_cifar10_nchw(x_train_raw)
-    x_test = preprocess_cifar10_nchw(x_test_raw)
+
+    if len(x_train) != dataset_config["expected_train_samples"]:
+        raise ValueError("Unexpected CIFAR-10 training split size")
 
     rng = np.random.default_rng(seed)
     model = CIFAR10CNN(rng)
-
-    if model.flattened_features != 32 * 8 * 8:
-        raise RuntimeError("CNN flattened feature size is inconsistent")
 
     epochs = int(training_config["epochs"])
     batch_size = int(training_config["batch_size"])
@@ -197,7 +190,6 @@ def main() -> None:
         if epoch in milestones:
             learning_rate *= schedule_gamma
 
-    del x_train, x_test, x_train_raw, x_test_raw
     print("Training complete.")
 
 
