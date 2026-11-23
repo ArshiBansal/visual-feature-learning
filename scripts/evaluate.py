@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 from data.cifar10 import load_cifar10
 from data.preprocessing import preprocess_cifar10_nchw
 from evaluation.metrics import evaluate_model
+from models.config import build_cifar10_cnn
 from models.cnn import CIFAR10CNN
 
 
@@ -105,6 +106,11 @@ def main() -> None:
     seed = int(config["project"]["seed"])
     dataset_config = config["dataset"]
     training_config = config["training"]
+    class_names = dataset_config["class_names"]
+    num_classes = int(dataset_config["num_classes"])
+
+    if len(class_names) != num_classes:
+        raise ValueError("class_names length must match dataset num_classes")
 
     (_, _), (x_test_raw, y_test) = load_cifar10()
     x_test = preprocess_cifar10_nchw(x_test_raw)
@@ -112,7 +118,10 @@ def main() -> None:
     if len(x_test) != dataset_config["expected_test_samples"]:
         raise ValueError("Unexpected CIFAR-10 test split size")
 
-    model = CIFAR10CNN(np.random.default_rng(seed))
+    model = build_cifar10_cnn(
+        config,
+        np.random.default_rng(seed),
+    )
     checkpoint_dir = PROJECT_ROOT / config["artifacts"]["checkpoint_dir"]
     checkpoint = args.checkpoint or checkpoint_dir / "cifar10_cnn_latest.npz"
     load_checkpoint(model, checkpoint)
@@ -122,10 +131,9 @@ def main() -> None:
         x=x_test,
         y=y_test,
         batch_size=int(training_config["batch_size"]),
-        num_classes=int(dataset_config["num_classes"]),
+        num_classes=num_classes,
     )
 
-    class_names = dataset_config["class_names"]
     print(f"Test loss:     {result['loss']:.4f}")
     print(f"Test accuracy: {result['accuracy']:.2%}")
     print("\nPer-class test accuracy:")

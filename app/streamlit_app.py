@@ -18,6 +18,14 @@ CHECKPOINT_PATH = (
     / "cifar10_cnn_latest.npz"
 )
 
+
+def _metrics_are_current() -> bool:
+    if not METRICS_PATH.is_file() or not CHECKPOINT_PATH.is_file():
+        return False
+
+    return METRICS_PATH.stat().st_mtime_ns >= CHECKPOINT_PATH.stat().st_mtime_ns
+
+
 st.set_page_config(
     page_title="Visual Feature Learning",
     page_icon="🧠",
@@ -64,18 +72,24 @@ with overview_right:
         "Latest checkpoint:",
         "ready" if CHECKPOINT_PATH.is_file() else "not generated",
     )
-    st.write(
-        "Final metrics:",
-        "ready" if METRICS_PATH.is_file() else "not generated",
-    )
+
+    metrics_current = _metrics_are_current()
+    if metrics_current:
+        metrics_status = "current"
+    elif METRICS_PATH.is_file():
+        metrics_status = "stale — rerun evaluation"
+    else:
+        metrics_status = "not generated"
+
+    st.write("Final metrics:", metrics_status)
 
 st.divider()
 
-if METRICS_PATH.is_file():
+if _metrics_are_current():
     with METRICS_PATH.open(encoding="utf-8") as file:
         metrics = json.load(file)
 
-    st.subheader("Latest baseline metrics")
+    st.subheader("Latest evaluated checkpoint metrics")
     metric_columns = st.columns(3)
     metric_columns[0].metric(
         "Test accuracy",
@@ -89,12 +103,15 @@ if METRICS_PATH.is_file():
         "Parameters",
         f"{int(metrics['parameter_count']):,}",
     )
+elif METRICS_PATH.is_file():
+    st.warning(
+        "The checkpoint has changed since these metrics were generated. "
+        "Run `python scripts/evaluate.py` to refresh them."
+    )
 else:
     st.info(
         "Train and evaluate the baseline to populate final metrics. "
         "Run `python scripts/train.py`, then `python scripts/evaluate.py`."
     )
 
-st.caption(
-    "Configuration: `configs/cifar10_baseline.json`"
-)
+st.caption("Configuration: `configs/cifar10_baseline.json`")

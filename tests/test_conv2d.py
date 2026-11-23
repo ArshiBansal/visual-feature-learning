@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from layers.conv2d import conv2d_backward, conv2d_forward
+from models.cnn import Conv2D
 
 
 def test_valid_convolution_output_shape_and_values():
@@ -61,3 +62,60 @@ def test_backward_rejects_incompatible_upstream_shape():
 
     with pytest.raises(ValueError, match="d_output"):
         conv2d_backward(np.ones((1, 1, 3, 3), dtype=np.float64), cache)
+
+
+def test_conv2d_layer_matches_functional_forward_and_backward():
+    rng = np.random.default_rng(13)
+    x = rng.normal(size=(2, 2, 5, 5)).astype(np.float32)
+    upstream = rng.normal(size=(2, 3, 5, 5)).astype(np.float32)
+
+    layer = Conv2D(
+        in_channels=2,
+        out_channels=3,
+        kernel_size=3,
+        rng=rng,
+        padding="same",
+    )
+    weights = layer.weights.copy()
+    bias = layer.bias.copy()
+
+    expected_output, cache = conv2d_forward(
+        x,
+        weights,
+        bias,
+        padding="same",
+    )
+    actual_output = layer.forward(x)
+    actual_d_x, actual_d_weights, actual_d_bias = layer.backward(upstream)
+    expected_d_x, expected_d_weights, expected_d_bias = conv2d_backward(
+        upstream,
+        cache,
+    )
+
+    np.testing.assert_allclose(actual_output, expected_output, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(actual_d_x, expected_d_x, rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        actual_d_weights,
+        expected_d_weights,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(
+        actual_d_bias,
+        expected_d_bias,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+def test_conv2d_backward_requires_forward():
+    layer = Conv2D(
+        in_channels=1,
+        out_channels=1,
+        kernel_size=3,
+        rng=np.random.default_rng(1),
+        padding="same",
+    )
+
+    with pytest.raises(RuntimeError, match="before forward"):
+        layer.backward(np.ones((1, 1, 4, 4), dtype=np.float32))

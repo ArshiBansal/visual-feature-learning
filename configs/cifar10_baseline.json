@@ -98,7 +98,7 @@
       },
       {
         "type": "dense",
-        "in_features": 512,
+        "in_features": 2048,
         "out_features": 10,
         "weight_initializer": "he_normal",
         "bias_initializer": "zeros"

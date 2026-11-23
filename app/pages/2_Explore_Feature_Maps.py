@@ -19,6 +19,7 @@ from data.cifar10 import load_cifar10
 from data.preprocessing import preprocess_cifar10_nchw
 from layers.conv2d import conv2d_forward
 from layers.max_pool2d import max_pool2d_forward
+from models.config import build_cifar10_cnn
 
 CONFIG_PATH = PROJECT_ROOT / "configs" / "cifar10_baseline.json"
 CHECKPOINT_PATH = (
@@ -29,16 +30,13 @@ CHECKPOINT_PATH = (
 )
 
 
-def _load_checkpoint() -> dict[str, np.ndarray]:
-    expected_shapes = {
-        "conv1_weights": (16, 3, 3, 3),
-        "conv1_bias": (16,),
-        "conv2_weights": (32, 16, 3, 3),
-        "conv2_bias": (32,),
-    }
+def _load_checkpoint(
+    path: Path,
+    expected_shapes: dict[str, tuple[int, ...]],
+) -> dict[str, np.ndarray]:
     loaded: dict[str, np.ndarray] = {}
 
-    with np.load(CHECKPOINT_PATH, allow_pickle=False) as checkpoint:
+    with np.load(path, allow_pickle=False) as checkpoint:
         for name, expected_shape in expected_shapes.items():
             if name not in checkpoint.files:
                 raise ValueError(f"Checkpoint is missing {name!r}")
@@ -78,13 +76,30 @@ with CONFIG_PATH.open(encoding="utf-8") as file:
     config = json.load(file)
 
 class_names = config["dataset"]["class_names"]
+seed = int(config["project"]["seed"])
+
+try:
+    configured_model = build_cifar10_cnn(
+        config,
+        np.random.default_rng(seed),
+    )
+except (KeyError, TypeError, ValueError) as error:
+    st.error(f"Invalid model configuration: {error}")
+    st.stop()
 
 if not CHECKPOINT_PATH.is_file():
     st.warning("Run baseline training before exploring learned filters.")
     st.stop()
 
+expected_shapes = {
+    "conv1_weights": configured_model.conv1.weights.shape,
+    "conv1_bias": configured_model.conv1.bias.shape,
+    "conv2_weights": configured_model.conv2.weights.shape,
+    "conv2_bias": configured_model.conv2.bias.shape,
+}
+
 try:
-    weights = _load_checkpoint()
+    weights = _load_checkpoint(CHECKPOINT_PATH, expected_shapes)
 except (OSError, ValueError) as error:
     st.error(f"Could not load the model checkpoint: {error}")
     st.stop()

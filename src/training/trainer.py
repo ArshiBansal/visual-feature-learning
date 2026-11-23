@@ -20,6 +20,9 @@ class Trainer:
         checkpoint_dir: str | Path,
         history_path: str | Path,
     ):
+        if num_classes <= 0:
+            raise ValueError("num_classes must be positive")
+
         self.model = model
         self.optimizer = optimizer
         self.num_classes = num_classes
@@ -90,13 +93,16 @@ class Trainer:
     ) -> dict[str, Any]:
         if batch_size <= 0:
             raise ValueError("batch_size must be positive")
+        if len(x) == 0:
+            raise ValueError("evaluation data must not be empty")
         if len(x) != len(y):
             raise ValueError("x and y must contain the same number of samples")
 
         total_loss = 0.0
         total_correct = 0
         confusion = np.zeros(
-            (self.num_classes, self.num_classes), dtype=np.int64
+            (self.num_classes, self.num_classes),
+            dtype=np.int64,
         )
 
         for start in range(0, len(x), batch_size):
@@ -113,7 +119,7 @@ class Trainer:
                 minlength=self.num_classes * self.num_classes,
             ).reshape(self.num_classes, self.num_classes)
 
-        sample_count = max(len(x), 1)
+        sample_count = len(x)
         return {
             "loss": total_loss / sample_count,
             "accuracy": total_correct / sample_count,
@@ -170,7 +176,8 @@ class Trainer:
 
             self.save_checkpoint()
             self.history_path.write_text(
-                json.dumps(history, indent=2), encoding="utf-8"
+                json.dumps(history, indent=2),
+                encoding="utf-8",
             )
 
             if epoch in milestones:
