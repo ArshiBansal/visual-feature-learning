@@ -1,6 +1,6 @@
 """CIFAR-10 loading and preprocessing utilities."""
 
-from src.data.cifar10 import (
+from .cifar10 import (
     CIFAR10_CLASS_NAMES,
     CIFAR10_IMAGE_SHAPE,
     CIFAR10_NUM_CLASSES,
@@ -9,7 +9,7 @@ from src.data.cifar10 import (
     load_cifar10,
     validate_cifar10_split,
 )
-from src.data.preprocessing import (
+from .preprocessing import (
     CIFAR10_MEAN,
     CIFAR10_STD,
     compute_channel_statistics,
