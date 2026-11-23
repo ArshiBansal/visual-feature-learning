@@ -60,7 +60,8 @@ def test_normalize_nhwc():
 
     assert normalized.shape == images.shape
     assert normalized.dtype == np.float32
-    np.testing.assert_allclose(normalized, (1.0 - CIFAR10_MEAN) / CIFAR10_STD)
+    expected = ((1.0 - CIFAR10_MEAN) / CIFAR10_STD).reshape(1, 1, 1, 3)
+    np.testing.assert_allclose(normalized, np.broadcast_to(expected, normalized.shape))
 
 
 def test_normalize_rejects_bad_shape():
@@ -90,7 +91,8 @@ def test_preprocess_cifar10_nchw():
 
     assert preprocessed.shape == (2, 3, 32, 32)
     assert preprocessed.dtype == np.float32
-    np.testing.assert_allclose(preprocessed, -CIFAR10_MEAN[:, None, None] / CIFAR10_STD[:, None, None])
+    expected = (-CIFAR10_MEAN / CIFAR10_STD).reshape(1, 3, 1, 1)
+    np.testing.assert_allclose(preprocessed, np.broadcast_to(expected, preprocessed.shape))
 
 
 def test_validate_cifar10_split_accepts_official_shapes():

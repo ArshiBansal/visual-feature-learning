@@ -119,3 +119,44 @@ def test_conv2d_backward_requires_forward():
 
     with pytest.raises(RuntimeError, match="before forward"):
         layer.backward(np.ones((1, 1, 4, 4), dtype=np.float32))
+
+
+def test_asymmetric_padding_backward_matches_numerical_gradient():
+    rng = np.random.default_rng(19)
+    x = rng.normal(size=(1, 1, 3, 3))
+    weights = rng.normal(size=(1, 1, 2, 2))
+    bias = rng.normal(size=1)
+    output, cache = conv2d_forward(
+        x,
+        weights,
+        bias,
+        stride=2,
+        padding=(1, 0),
+    )
+    upstream = rng.normal(size=output.shape)
+    d_x, d_weights, d_bias = conv2d_backward(upstream, cache)
+
+    def objective():
+        result, _ = conv2d_forward(
+            x,
+            weights,
+            bias,
+            stride=2,
+            padding=(1, 0),
+        )
+        return np.sum(result * upstream)
+
+    epsilon = 1e-5
+    numeric_weights = np.zeros_like(weights)
+    for index in np.ndindex(weights.shape):
+        original = weights[index]
+        weights[index] = original + epsilon
+        plus = objective()
+        weights[index] = original - epsilon
+        minus = objective()
+        weights[index] = original
+        numeric_weights[index] = (plus - minus) / (2 * epsilon)
+
+    np.testing.assert_allclose(d_weights, numeric_weights, rtol=1e-7, atol=1e-7)
+    assert d_x.shape == x.shape
+    assert d_bias.shape == bias.shape

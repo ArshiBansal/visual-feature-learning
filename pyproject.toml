@@ -43,6 +43,7 @@ packages = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 addopts = "-ra --strict-markers"
 
 [tool.ruff]
@@ -52,7 +53,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
-ignore = ["E501"]
+ignore = ["E402", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"
