@@ -33,9 +33,13 @@ class Dense:
             raise ValueError(
                 f"x must have shape (batch, {self.weights.shape[1]})"
             )
+        if x.shape[0] == 0:
+            raise ValueError("x must contain at least one sample")
+        if not np.all(np.isfinite(x)):
+            raise ValueError("x must contain only finite values")
 
         self.input = x
-        return x @ self.weights.T + self.bias
+        return (x @ self.weights.T + self.bias).astype(np.float32, copy=False)
 
     def backward(self, d_output):
         if self.input is None:

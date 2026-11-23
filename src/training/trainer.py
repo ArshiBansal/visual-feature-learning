@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import time
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -20,7 +20,7 @@ class Trainer:
         checkpoint_dir: str | Path,
         history_path: str | Path,
     ):
-        if num_classes <= 0:
+        if not isinstance(num_classes, int) or isinstance(num_classes, bool) or num_classes <= 0:
             raise ValueError("num_classes must be positive")
 
         self.model = model
@@ -91,7 +91,7 @@ class Trainer:
         y: np.ndarray,
         batch_size: int,
     ) -> dict[str, Any]:
-        if batch_size <= 0:
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
             raise ValueError("batch_size must be positive")
         if len(x) == 0:
             raise ValueError("evaluation data must not be empty")
@@ -138,6 +138,14 @@ class Trainer:
         milestones: list[int] | set[int] | None = None,
         schedule_gamma: float = 1.0,
     ) -> dict[str, list[Any]]:
+        if not isinstance(epochs, int) or isinstance(epochs, bool) or epochs <= 0:
+            raise ValueError("epochs must be positive")
+        if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+        if not np.isscalar(schedule_gamma) or not np.isfinite(schedule_gamma):
+            raise ValueError("schedule_gamma must be finite")
+        if schedule_gamma < 0:
+            raise ValueError("schedule_gamma must be non-negative")
         milestones = set(milestones or [])
         history: dict[str, list[Any]] = {
             "epoch": [],
@@ -188,6 +196,10 @@ class Trainer:
         return history
 
     def save_checkpoint(self, name: str = "cifar10_cnn_latest.npz") -> Path:
+        if not isinstance(name, str) or not name:
+            raise ValueError("checkpoint name must be a non-empty string")
+        if Path(name).name != name:
+            raise ValueError("checkpoint name must not contain a directory")
         path = self.checkpoint_dir / name
         np.savez(
             path,

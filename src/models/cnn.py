@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -32,6 +32,23 @@ class Conv2D:
         ):
             if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+
+        if isinstance(padding, str):
+            if padding not in ("valid", "same"):
+                raise ValueError("padding must be 'valid', 'same', an int, or a pair")
+        elif isinstance(padding, int) and not isinstance(padding, bool):
+            if padding < 0:
+                raise ValueError("padding cannot be negative")
+        elif isinstance(padding, tuple) and len(padding) == 2:
+            if any(
+                not isinstance(item, int)
+                or isinstance(item, bool)
+                or item < 0
+                for item in padding
+            ):
+                raise ValueError("padding values must be non-negative integers")
+        else:
+            raise TypeError("padding must be 'valid', 'same', an int, or a pair")
 
         self.stride = stride
         self.padding = padding
@@ -162,6 +179,10 @@ class CIFAR10CNN:
             raise ValueError("x must have shape (batch, channels, height, width)")
         if x.shape[1:] != (3, 32, 32):
             raise ValueError("x must have shape (batch, 3, 32, 32)")
+        if x.shape[0] == 0:
+            raise ValueError("x must contain at least one sample")
+        if not np.all(np.isfinite(x)):
+            raise ValueError("x must contain only finite values")
 
         x = self.conv1.forward(x)
         x = self.relu1.forward(x)
@@ -236,6 +257,8 @@ def cross_entropy_with_logits(
         raise ValueError("logits must have shape (batch, num_classes)")
     if logits.shape[0] == 0:
         raise ValueError("logits must contain at least one sample")
+    if not np.all(np.isfinite(logits)):
+        raise ValueError("logits must contain only finite values")
     if labels.shape != (logits.shape[0],):
         raise ValueError("labels must have shape (batch,)")
     if labels.dtype.kind not in "iu":

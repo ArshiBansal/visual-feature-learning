@@ -37,8 +37,14 @@ def build_cifar10_cnn(
         )
 
     class_names = dataset.get("class_names")
-    if class_names is not None and len(class_names) != num_classes:
-        raise ValueError("class_names length must match dataset num_classes")
+    if class_names is not None:
+        if not isinstance(class_names, list) or any(
+            not isinstance(name, str) or not name
+            for name in class_names
+        ):
+            raise ValueError("dataset.class_names must be a list of non-empty strings")
+        if len(class_names) != num_classes:
+            raise ValueError("class_names length must match dataset num_classes")
 
     expected_layer_types = [
         "conv2d",
@@ -66,9 +72,12 @@ def build_cifar10_cnn(
     convolution = model_config.get("convolution")
     if not isinstance(convolution, Mapping):
         raise ValueError("model.convolution must be an object")
+    stride = convolution.get("stride")
     if (
         convolution.get("operation") != "cross_correlation"
-        or convolution.get("stride") != 1
+        or not isinstance(stride, int)
+        or isinstance(stride, bool)
+        or stride != 1
         or convolution.get("padding") != "same"
     ):
         raise ValueError(

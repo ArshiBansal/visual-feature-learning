@@ -24,6 +24,8 @@ def max_pool2d_forward(x, pool_size=2, stride=None):
     x = np.asarray(x, dtype=np.float64)
     if x.ndim != 4:
         raise ValueError("x must be a rank-4 NCHW tensor")
+    if not np.all(np.isfinite(x)):
+        raise ValueError("x must contain only finite values")
 
     pool_height, pool_width = _pair(pool_size, "pool_size")
     if stride is None:
@@ -32,6 +34,8 @@ def max_pool2d_forward(x, pool_size=2, stride=None):
         raise ValueError("stride must be a positive integer")
 
     batch_size, channels, height, width = x.shape
+    if min(batch_size, channels, height, width) <= 0:
+        raise ValueError("input dimensions must be positive")
     output_height = (height - pool_height) // stride + 1
     output_width = (width - pool_width) // stride + 1
     if output_height <= 0 or output_width <= 0:
@@ -69,6 +73,8 @@ def max_pool2d_forward(x, pool_size=2, stride=None):
 def max_pool2d_backward(d_output, cache):
     """Backpropagate through max_pool2d_forward."""
     d_output = np.asarray(d_output, dtype=np.float64)
+    if not np.all(np.isfinite(d_output)):
+        raise ValueError("d_output must contain only finite values")
     if d_output.shape != cache["output_shape"]:
         raise ValueError("d_output has an incompatible shape")
 
