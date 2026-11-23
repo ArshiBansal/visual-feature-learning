@@ -58,6 +58,10 @@ def validate_cifar10_split(
     y_test: np.ndarray,
 ) -> None:
     """Raise an error if arrays don't match the complete official split."""
+    x_train = np.asarray(x_train)
+    y_train = np.asarray(y_train)
+    x_test = np.asarray(x_test)
+    y_test = np.asarray(y_test)
     expected_train_images = (CIFAR10_TRAIN_SAMPLES, *CIFAR10_IMAGE_SHAPE)
     expected_test_images = (CIFAR10_TEST_SAMPLES, *CIFAR10_IMAGE_SHAPE)
 

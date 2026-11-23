@@ -25,7 +25,10 @@ def _padding_for_conv(height, width, kernel_height, kernel_width, stride, paddin
         if padding == "valid":
             return 0, 0, 0, 0
         if padding != "same":
-            raise ValueError("padding must be 'valid', 'same', an int, or a pair")
+            raise ValueError(
+                "padding must be 'valid', 'same', an int, a 2-tuple, "
+                "or a 4-tuple"
+            )
 
         output_height = (height + stride - 1) // stride
         output_width = (width + stride - 1) // stride
@@ -37,6 +40,7 @@ def _padding_for_conv(height, width, kernel_height, kernel_width, stride, paddin
             (output_width - 1) * stride + kernel_width - width,
             0,
         )
+
         pad_top = total_height // 2
         pad_left = total_width // 2
         return (
@@ -51,16 +55,33 @@ def _padding_for_conv(height, width, kernel_height, kernel_width, stride, paddin
             raise ValueError("padding cannot be negative")
         return padding, padding, padding, padding
 
-    if isinstance(padding, tuple) and len(padding) == 2:
-        pad_height, pad_width = padding
-        if any(
-            not isinstance(item, int) or isinstance(item, bool) or item < 0
-            for item in padding
-        ):
-            raise ValueError("padding values must be non-negative integers")
-        return pad_height, pad_height, pad_width, pad_width
+    if isinstance(padding, tuple):
+        if len(padding) == 2:
+            pad_height, pad_width = padding
+            if any(
+                not isinstance(item, int)
+                or isinstance(item, bool)
+                or item < 0
+                for item in padding
+            ):
+                raise ValueError("padding values must be non-negative integers")
+            return pad_height, pad_height, pad_width, pad_width
 
-    raise TypeError("padding must be 'valid', 'same', an int, or a pair")
+        if len(padding) == 4:
+            pad_top, pad_bottom, pad_left, pad_right = padding
+            if any(
+                not isinstance(item, int)
+                or isinstance(item, bool)
+                or item < 0
+                for item in padding
+            ):
+                raise ValueError("padding values must be non-negative integers")
+            return pad_top, pad_bottom, pad_left, pad_right
+
+    raise TypeError(
+        "padding must be 'valid', 'same', an int, a 2-tuple, "
+        "or a 4-tuple"
+    )
 
 
 def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
@@ -71,7 +92,9 @@ def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
         weights: Filters shaped (C_out, C_in, K_h, K_w).
         bias: Bias vector shaped (C_out,).
         stride: Positive integer stride.
-        padding: 'valid', 'same', a non-negative integer, or (height, width).
+        padding: 'valid', 'same', a non-negative integer, a pair
+            (height, width), or four values
+            (top, bottom, left, right).
 
     Returns:
         The output tensor and a cache for conv2d_backward.
@@ -110,6 +133,7 @@ def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
         stride,
         padding,
     )
+
     x_padded = np.pad(
         x,
         (
@@ -133,15 +157,15 @@ def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
     )
     windows = windows[:, :, ::stride, ::stride, :, :]
 
-    # Order each patch as (C_in, K_h, K_w), matching weights.reshape below.
     patches = windows.transpose(0, 2, 3, 1, 4, 5).reshape(
         batch_size * output_height * output_width,
         in_channels * kernel_height * kernel_width,
     )
     flattened_weights = weights.reshape(out_channels, -1)
 
-    output = patches @ flattened_weights.T + bias
-    output = output.reshape(
+    output = (
+        patches @ flattened_weights.T + bias
+    ).reshape(
         batch_size,
         output_height,
         output_width,
@@ -154,17 +178,16 @@ def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
         "input_shape": x.shape,
         "stride": stride,
         "pad_top": pad_top,
+        "pad_bottom": pad_bottom,
         "pad_left": pad_left,
+        "pad_right": pad_right,
         "output_shape": output.shape,
     }
     return output, cache
 
 
 def conv2d_backward(d_output, cache):
-    """Backpropagate through conv2d_forward.
-
-    Returns gradients for the input, weights, and bias.
-    """
+    """Backpropagate through conv2d_forward."""
     d_output = np.asarray(d_output, dtype=np.float64)
     if d_output.shape != cache["output_shape"]:
         raise ValueError("d_output has an incompatible shape")
@@ -174,7 +197,9 @@ def conv2d_backward(d_output, cache):
     input_shape = cache["input_shape"]
     stride = cache["stride"]
     pad_top = cache["pad_top"]
+    pad_bottom = cache["pad_bottom"]
     pad_left = cache["pad_left"]
+    pad_right = cache["pad_right"]
 
     batch_size, in_channels, height, width = input_shape
     out_channels, _, kernel_height, kernel_width = weights.shape
@@ -190,7 +215,9 @@ def conv2d_backward(d_output, cache):
     ).reshape(weights.shape)
     d_bias = flattened_d_output.sum(axis=0)
 
-    flattened_d_patches = flattened_d_output @ weights.reshape(out_channels, -1)
+    flattened_d_patches = (
+        flattened_d_output @ weights.reshape(out_channels, -1)
+    )
     d_patches = flattened_d_patches.reshape(
         batch_size,
         output_height,
@@ -200,8 +227,8 @@ def conv2d_backward(d_output, cache):
         kernel_width,
     )
 
-    padded_height = height + 2 * pad_top
-    padded_width = width + 2 * pad_left
+    padded_height = height + pad_top + pad_bottom
+    padded_width = width + pad_left + pad_right
     d_x_padded = np.zeros(
         (batch_size, in_channels, padded_height, padded_width),
         dtype=np.float64,
@@ -211,8 +238,9 @@ def conv2d_backward(d_output, cache):
         y_end = kernel_y + output_height * stride
         for kernel_x in range(kernel_width):
             x_end = kernel_x + output_width * stride
-            patch_gradient = d_patches[:, :, :, :, kernel_y, kernel_x]
-            patch_gradient = patch_gradient.transpose(0, 3, 1, 2)
+            patch_gradient = d_patches[
+                :, :, :, :, kernel_y, kernel_x
+            ].transpose(0, 3, 1, 2)
 
             d_x_padded[
                 :,

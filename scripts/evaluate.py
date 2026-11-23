@@ -17,9 +17,8 @@ if str(SRC_ROOT) not in sys.path:
 from data.cifar10 import load_cifar10
 from data.preprocessing import preprocess_cifar10_nchw
 from evaluation.metrics import evaluate_model
-from models.config import build_cifar10_cnn
 from models.cnn import CIFAR10CNN
-
+from models.config import build_cifar10_cnn
 
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "cifar10_baseline.json"
 
@@ -34,7 +33,16 @@ def parse_args() -> argparse.Namespace:
 def load_config(path: Path) -> dict:
     path = path if path.is_absolute() else PROJECT_ROOT / path
     with path.open(encoding="utf-8") as file:
-        return json.load(file)
+        config = json.load(file)
+    if not isinstance(config, dict):
+        raise ValueError("Configuration root must be a JSON object")
+    return config
+
+
+def _require_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    return value
 
 
 def _checkpoint_array(
@@ -46,6 +54,10 @@ def _checkpoint_array(
         raise ValueError(f"Checkpoint is missing {name!r}")
 
     array = np.asarray(checkpoint[name])
+    if array.dtype.kind not in "iuf":
+        raise TypeError(f"Checkpoint array {name!r} must contain numeric values")
+    if not np.all(np.isfinite(array)):
+        raise ValueError(f"Checkpoint array {name!r} must contain only finite values")
     if array.shape == expected_shape:
         return array.copy()
 
@@ -103,11 +115,14 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
 
-    seed = int(config["project"]["seed"])
+    seed = _require_int(config["project"]["seed"], "project.seed")
     dataset_config = config["dataset"]
     training_config = config["training"]
     class_names = dataset_config["class_names"]
-    num_classes = int(dataset_config["num_classes"])
+    num_classes = _require_int(
+        dataset_config["num_classes"],
+        "dataset.num_classes",
+    )
 
     if len(class_names) != num_classes:
         raise ValueError("class_names length must match dataset num_classes")
@@ -115,7 +130,11 @@ def main() -> None:
     (_, _), (x_test_raw, y_test) = load_cifar10()
     x_test = preprocess_cifar10_nchw(x_test_raw)
 
-    if len(x_test) != dataset_config["expected_test_samples"]:
+    expected_test_samples = _require_int(
+        dataset_config["expected_test_samples"],
+        "dataset.expected_test_samples",
+    )
+    if len(x_test) != expected_test_samples:
         raise ValueError("Unexpected CIFAR-10 test split size")
 
     model = build_cifar10_cnn(
@@ -130,7 +149,10 @@ def main() -> None:
         model=model,
         x=x_test,
         y=y_test,
-        batch_size=int(training_config["batch_size"]),
+        batch_size=_require_int(
+            training_config["batch_size"],
+            "training.batch_size",
+        ),
         num_classes=num_classes,
     )
 
@@ -140,6 +162,7 @@ def main() -> None:
     for name, class_accuracy in zip(
         class_names,
         result["per_class_accuracy"],
+        strict=False,
     ):
         print(f"  {name:>10}: {class_accuracy:.2%}")
 
@@ -153,6 +176,7 @@ def main() -> None:
             for name, class_accuracy in zip(
                 class_names,
                 result["per_class_accuracy"],
+                strict=False,
             )
         },
         "confusion_matrix": result["confusion_matrix"].tolist(),

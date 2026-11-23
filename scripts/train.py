@@ -19,9 +19,8 @@ if str(SRC_ROOT) not in sys.path:
 
 from data.cifar10 import load_cifar10
 from data.preprocessing import preprocess_cifar10_nchw
-from models.config import build_cifar10_cnn
 from models.cnn import CIFAR10CNN, cross_entropy_with_logits
-
+from models.config import build_cifar10_cnn
 
 DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "cifar10_baseline.json"
 
@@ -35,7 +34,10 @@ def parse_args() -> argparse.Namespace:
 def load_config(path: Path) -> dict:
     path = path if path.is_absolute() else PROJECT_ROOT / path
     with path.open(encoding="utf-8") as file:
-        return json.load(file)
+        config = json.load(file)
+    if not isinstance(config, dict):
+        raise ValueError("Configuration root must be a JSON object")
+    return config
 
 
 def save_checkpoint(model: CIFAR10CNN, path: Path) -> None:
@@ -153,11 +155,17 @@ def _require_bool(value: object, name: str) -> bool:
     return value
 
 
+def _require_int(value: object, name: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer")
+    return value
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
 
-    seed = int(config["project"]["seed"])
+    seed = _require_int(config["project"]["seed"], "project.seed")
     dataset_config = config["dataset"]
     training_config = config["training"]
     optimizer_config = training_config["optimizer"]
@@ -171,8 +179,8 @@ def main() -> None:
     if schedule_config.get("name") != "step_decay":
         raise ValueError("Only the step_decay learning-rate schedule is supported")
 
-    epochs = int(training_config["epochs"])
-    batch_size = int(training_config["batch_size"])
+    epochs = _require_int(training_config["epochs"], "training.epochs")
+    batch_size = _require_int(training_config["batch_size"], "training.batch_size")
     if epochs <= 0:
         raise ValueError("training.epochs must be positive")
     if batch_size <= 0:
@@ -207,9 +215,15 @@ def main() -> None:
     learning_rate = float(optimizer_config["learning_rate"])
     momentum = float(optimizer_config["momentum"])
     weight_decay = float(optimizer_config["weight_decay"])
-    milestones = {int(milestone) for milestone in schedule_config["milestones"]}
+    milestones = {
+        _require_int(milestone, "learning_rate_schedule.milestones")
+        for milestone in schedule_config["milestones"]
+    }
     schedule_gamma = float(schedule_config["gamma"])
-    log_every = int(training_config["log_every_n_batches"])
+    log_every = _require_int(
+        training_config["log_every_n_batches"],
+        "training.log_every_n_batches",
+    )
 
     if not np.isfinite(learning_rate) or learning_rate < 0:
         raise ValueError("optimizer.learning_rate must be finite and non-negative")

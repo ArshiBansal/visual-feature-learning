@@ -33,6 +33,8 @@ def normalize_nhwc(
     images = np.asarray(images, dtype=np.float32)
     if images.ndim != 4:
         raise ValueError("Expected NHWC images shaped (N, H, W, C)")
+    if not np.all(np.isfinite(images)):
+        raise ValueError("Images must contain finite values")
 
     mean = np.asarray(mean, dtype=np.float32)
     std = np.asarray(std, dtype=np.float32)
