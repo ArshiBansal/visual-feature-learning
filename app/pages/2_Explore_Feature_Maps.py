@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -27,6 +28,45 @@ CHECKPOINT_PATH = (
     / "cifar10_cnn_latest.npz"
 )
 
+
+def _load_checkpoint() -> dict[str, np.ndarray]:
+    expected_shapes = {
+        "conv1_weights": (16, 3, 3, 3),
+        "conv1_bias": (16,),
+        "conv2_weights": (32, 16, 3, 3),
+        "conv2_bias": (32,),
+    }
+    loaded: dict[str, np.ndarray] = {}
+
+    with np.load(CHECKPOINT_PATH, allow_pickle=False) as checkpoint:
+        for name, expected_shape in expected_shapes.items():
+            if name not in checkpoint.files:
+                raise ValueError(f"Checkpoint is missing {name!r}")
+
+            array = np.asarray(checkpoint[name])
+            if array.shape != expected_shape:
+                if (
+                    len(expected_shape) == 4
+                    and array.ndim == 2
+                    and array.size == int(np.prod(expected_shape))
+                ):
+                    array = array.reshape(expected_shape)
+                else:
+                    raise ValueError(
+                        f"Checkpoint array {name!r} has shape {array.shape}; "
+                        f"expected {expected_shape}"
+                    )
+            loaded[name] = array.astype(np.float32, copy=True)
+
+    return loaded
+
+
+@st.cache_data
+def _load_test_data() -> tuple[np.ndarray, np.ndarray]:
+    (_, _), (images, labels) = load_cifar10()
+    return preprocess_cifar10_nchw(images), labels
+
+
 st.set_page_config(
     page_title="Explore Feature Maps",
     page_icon="🔍",
@@ -34,8 +74,7 @@ st.set_page_config(
 )
 st.title("Explore Feature Maps")
 
-with (CONFIG_PATH).open(encoding="utf-8") as file:
-    import json
+with CONFIG_PATH.open(encoding="utf-8") as file:
     config = json.load(file)
 
 class_names = config["dataset"]["class_names"]
@@ -44,76 +83,68 @@ if not CHECKPOINT_PATH.is_file():
     st.warning("Run baseline training before exploring learned filters.")
     st.stop()
 
-with np.load(CHECKPOINT_PATH) as checkpoint:
-    conv1_weights = checkpoint["conv1_weights"].copy()
-    conv1_bias = checkpoint["conv1_bias"].copy()
-    conv2_weights = checkpoint["conv2_weights"].copy()
-    conv2_bias = checkpoint["conv2_bias"].copy()
+try:
+    weights = _load_checkpoint()
+except (OSError, ValueError) as error:
+    st.error(f"Could not load the model checkpoint: {error}")
+    st.stop()
+
+conv1_weights = weights["conv1_weights"]
+conv1_bias = weights["conv1_bias"]
+conv2_weights = weights["conv2_weights"]
+conv2_bias = weights["conv2_bias"]
 
 filter_tab, activation_tab = st.tabs(["Learned filters", "Activation maps"])
 
 with filter_tab:
     columns = st.slider("Columns", 2, 8, 4)
-    count = conv1_weights.shape[0]
+    filter_columns = st.columns(columns)
 
-    if count:
-        grid_columns = st.columns(columns)
-        for filter_index in range(count):
-            rgb_filter = conv1_weights[filter_index].transpose(1, 2, 0)
-            low = float(rgb_filter.min())
-            high = float(rgb_filter.max())
-            display_filter = (rgb_filter - low) / (high - low + 1e-8)
+    for filter_index, kernel in enumerate(conv1_weights):
+        rgb_filter = kernel.transpose(1, 2, 0)
+        low = float(rgb_filter.min())
+        high = float(rgb_filter.max())
+        display_filter = (rgb_filter - low) / (high - low + 1e-8)
 
-            column = grid_columns[filter_index % columns]
-            column.image(
-                display_filter,
-                caption=f"Filter {filter_index}",
-                use_container_width=True,
-            )
+        filter_columns[filter_index % columns].image(
+            display_filter,
+            caption=f"Filter {filter_index}",
+            use_container_width=True,
+        )
 
-    channel_strength = np.sqrt(
-        np.mean(conv2_weights**2, axis=(2, 3))
+    channel_strength = np.sqrt(np.mean(conv2_weights**2, axis=(2, 3)))
+    strength_figure = go.Figure(
+        go.Heatmap(
+            z=channel_strength,
+            x=[str(index) for index in range(channel_strength.shape[1])],
+            y=[str(index) for index in range(channel_strength.shape[0])],
+            colorscale="Viridis",
+            colorbar={"title": "RMS weight"},
+        )
     )
-    st.plotly_chart(
-        go.Figure(
-            go.Heatmap(
-                z=channel_strength,
-                x=[
-                    str(index)
-                    for index in range(channel_strength.shape[1])
-                ],
-                y=[
-                    str(index)
-                    for index in range(channel_strength.shape[0])
-                ],
-                colorscale="Viridis",
-                colorbar={"title": "RMS weight"},
-            )
-        ).update_layout(
-            title="Second-layer filter strength by input channel",
-            xaxis_title="Input feature-map channel",
-            yaxis_title="Output filter",
-        ),
-        use_container_width=True,
+    strength_figure.update_layout(
+        title="Second-layer filter strength by input channel",
+        xaxis_title="Input feature-map channel",
+        yaxis_title="Output filter",
     )
+    st.plotly_chart(strength_figure, use_container_width=True)
 
 with activation_tab:
-    (_, _), (test_images, y_test) = load_cifar10()
-    test_images = preprocess_cifar10_nchw(test_images)
+    try:
+        test_images, y_test = _load_test_data()
+    except (ImportError, OSError, ValueError) as error:
+        st.error(f"Could not load CIFAR-10 test data: {error}")
+        st.stop()
 
-    sample_count = len(test_images)
     sample_index = st.slider(
         "Test image",
         0,
-        sample_count - 1,
+        len(test_images) - 1,
         0,
     )
-
     image = test_images[sample_index : sample_index + 1]
 
-    st.caption(
-        f"Actual class: {class_names[int(y_test[sample_index])]}"
-    )
+    st.caption(f"Actual class: {class_names[int(y_test[sample_index])]}")
 
     conv1_output, _ = conv2d_forward(
         image,
@@ -161,7 +192,7 @@ with activation_tab:
     with left:
         first_map = conv1_relu[0, first_map_index]
         height, width = first_map.shape
-        fig = go.Figure(
+        figure = go.Figure(
             go.Surface(
                 z=first_map,
                 x=np.arange(width),
@@ -170,16 +201,16 @@ with activation_tab:
                 colorbar={"title": "Activation"},
             )
         )
-        fig.update_layout(
+        figure.update_layout(
             title=f"First-stage activation channel {first_map_index}",
             height=650,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(figure, use_container_width=True)
 
     with right:
         second_map = pool2_output[0, second_map_index]
         height, width = second_map.shape
-        fig = go.Figure(
+        figure = go.Figure(
             go.Surface(
                 z=second_map,
                 x=np.arange(width),
@@ -188,8 +219,8 @@ with activation_tab:
                 colorbar={"title": "Activation"},
             )
         )
-        fig.update_layout(
+        figure.update_layout(
             title=f"Second-stage activation channel {second_map_index}",
             height=650,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(figure, use_container_width=True)

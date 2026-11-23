@@ -36,15 +36,66 @@ def load_config(path: Path) -> dict:
         return json.load(file)
 
 
+def _checkpoint_array(
+    checkpoint: np.lib.npyio.NpzFile,
+    name: str,
+    expected_shape: tuple[int, ...],
+) -> np.ndarray:
+    if name not in checkpoint.files:
+        raise ValueError(f"Checkpoint is missing {name!r}")
+
+    array = np.asarray(checkpoint[name])
+    if array.shape == expected_shape:
+        return array.copy()
+
+    # Older training notebooks saved convolution weights as flattened filters.
+    if (
+        len(expected_shape) == 4
+        and array.ndim == 2
+        and array.size == int(np.prod(expected_shape))
+    ):
+        return array.reshape(expected_shape).copy()
+
+    raise ValueError(
+        f"Checkpoint array {name!r} has shape {array.shape}; "
+        f"expected {expected_shape}"
+    )
+
+
 def load_checkpoint(model: CIFAR10CNN, path: Path) -> None:
     path = path if path.is_absolute() else PROJECT_ROOT / path
-    with np.load(path) as checkpoint:
-        model.conv1.weights = np.asarray(checkpoint["conv1_weights"]).copy()
-        model.conv1.bias = np.asarray(checkpoint["conv1_bias"]).copy()
-        model.conv2.weights = np.asarray(checkpoint["conv2_weights"]).copy()
-        model.conv2.bias = np.asarray(checkpoint["conv2_bias"]).copy()
-        model.dense.weights = np.asarray(checkpoint["dense_weights"]).copy()
-        model.dense.bias = np.asarray(checkpoint["dense_bias"]).copy()
+
+    with np.load(path, allow_pickle=False) as checkpoint:
+        model.conv1.weights = _checkpoint_array(
+            checkpoint,
+            "conv1_weights",
+            model.conv1.weights.shape,
+        ).astype(np.float32)
+        model.conv1.bias = _checkpoint_array(
+            checkpoint,
+            "conv1_bias",
+            model.conv1.bias.shape,
+        ).astype(np.float32)
+        model.conv2.weights = _checkpoint_array(
+            checkpoint,
+            "conv2_weights",
+            model.conv2.weights.shape,
+        ).astype(np.float32)
+        model.conv2.bias = _checkpoint_array(
+            checkpoint,
+            "conv2_bias",
+            model.conv2.bias.shape,
+        ).astype(np.float32)
+        model.dense.weights = _checkpoint_array(
+            checkpoint,
+            "dense_weights",
+            model.dense.weights.shape,
+        ).astype(np.float32)
+        model.dense.bias = _checkpoint_array(
+            checkpoint,
+            "dense_bias",
+            model.dense.bias.shape,
+        ).astype(np.float32)
 
 
 def main() -> None:
@@ -61,31 +112,27 @@ def main() -> None:
     if len(x_test) != dataset_config["expected_test_samples"]:
         raise ValueError("Unexpected CIFAR-10 test split size")
 
-    rng = np.random.default_rng(seed)
-    model = CIFAR10CNN(rng)
-
+    model = CIFAR10CNN(np.random.default_rng(seed))
     checkpoint_dir = PROJECT_ROOT / config["artifacts"]["checkpoint_dir"]
     checkpoint = args.checkpoint or checkpoint_dir / "cifar10_cnn_latest.npz"
     load_checkpoint(model, checkpoint)
 
-    batch_size = int(training_config["batch_size"])
-    num_classes = int(dataset_config["num_classes"])
     result = evaluate_model(
         model=model,
         x=x_test,
         y=y_test,
-        batch_size=batch_size,
-        num_classes=num_classes,
+        batch_size=int(training_config["batch_size"]),
+        num_classes=int(dataset_config["num_classes"]),
     )
 
-    confusion = result["confusion_matrix"]
-    per_class = result["per_class_accuracy"]
     class_names = dataset_config["class_names"]
-
     print(f"Test loss:     {result['loss']:.4f}")
     print(f"Test accuracy: {result['accuracy']:.2%}")
     print("\nPer-class test accuracy:")
-    for name, class_accuracy in zip(class_names, per_class):
+    for name, class_accuracy in zip(
+        class_names,
+        result["per_class_accuracy"],
+    ):
         print(f"  {name:>10}: {class_accuracy:.2%}")
 
     output_dir = PROJECT_ROOT / config["artifacts"]["output_dir"]
@@ -95,19 +142,19 @@ def main() -> None:
         "test_accuracy": result["accuracy"],
         "per_class_accuracy": {
             name: float(class_accuracy)
-            for name, class_accuracy in zip(class_names, per_class)
+            for name, class_accuracy in zip(
+                class_names,
+                result["per_class_accuracy"],
+            )
         },
-        "confusion_matrix": confusion.tolist(),
+        "confusion_matrix": result["confusion_matrix"].tolist(),
         "test_samples": len(x_test),
-        "batch_size": batch_size,
+        "batch_size": int(training_config["batch_size"]),
         "parameter_count": model.parameter_count(),
     }
 
     metrics_path = output_dir / "final_metrics.json"
-    metrics_path.write_text(
-        json.dumps(metrics, indent=2),
-        encoding="utf-8",
-    )
+    metrics_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     print("\nSaved metrics to:", metrics_path)
 
 
