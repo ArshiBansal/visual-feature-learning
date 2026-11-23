@@ -5,8 +5,8 @@ __pycache__/
 *.so
 
 # Packaging and build output
-build/
-dist/
+/build/
+/dist/
 *.egg-info/
 .eggs/
 wheels/
@@ -36,12 +36,12 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
-# Downloaded datasets and generated artifacts
+# Generated data and artifacts (repository root only)
 /data/
-outputs/
-checkpoints/
-logs/
-runs/
+/outputs/
+/checkpoints/
+/logs/
+/runs/
 *.ckpt
 *.checkpoint
 *.h5

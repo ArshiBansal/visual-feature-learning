@@ -1,4 +1,4 @@
-"""CIFAR-10 preprocessing utilities."""
+"""CIFAR-10 image scaling, normalization, and layout conversion."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ CIFAR10_MEAN: Final = np.asarray(
     [0.4914, 0.4822, 0.4465],
     dtype=np.float32,
 )
-
 CIFAR10_STD: Final = np.asarray(
     [0.2470, 0.2430, 0.2610],
     dtype=np.float32,
@@ -18,11 +17,10 @@ CIFAR10_STD: Final = np.asarray(
 
 
 def scale_to_float32(images: np.ndarray) -> np.ndarray:
-    """Scale uint8 images from [0, 255] to float32 [0, 1]."""
+    """Scale uint8 image values from [0, 255] to float32 [0, 1]."""
+    images = np.asarray(images)
     if images.dtype != np.uint8:
-        raise TypeError("CIFAR-10 images must use uint8 pixel values")
-    if not np.all((images >= 0) & (images <= 255)):
-        raise ValueError("uint8 CIFAR-10 values must be in [0, 255]")
+        raise TypeError("Expected uint8 images with pixel values in [0, 255]")
     return images.astype(np.float32) / np.float32(255.0)
 
 
@@ -31,27 +29,37 @@ def normalize_nhwc(
     mean: np.ndarray = CIFAR10_MEAN,
     std: np.ndarray = CIFAR10_STD,
 ) -> np.ndarray:
-    """Channel-normalize float32 NHWC images without copying if possible."""
+    """Normalize float NHWC images using channel-wise means and standard deviations."""
+    images = np.asarray(images, dtype=np.float32)
     if images.ndim != 4:
-        raise ValueError("Expected NHWC images with shape (N, H, W, C)")
-    if images.dtype != np.float32:
-        images = images.astype(np.float32)
-    if images.shape[-1] != mean.size:
-        raise ValueError("Channel count must match the mean and standard deviation")
-    if np.any(np.asarray(mean) == 0) or np.any(np.asarray(std) <= 0):
-        raise ValueError("mean and std must contain valid normalization values")
+        raise ValueError("Expected NHWC images shaped (N, H, W, C)")
 
-    mean = np.asarray(mean, dtype=np.float32).reshape(1, 1, 1, -1)
-    std = np.asarray(std, dtype=np.float32).reshape(1, 1, 1, -1)
+    mean = np.asarray(mean, dtype=np.float32)
+    std = np.asarray(std, dtype=np.float32)
+    if mean.ndim != 1 or std.ndim != 1 or mean.shape != std.shape:
+        raise ValueError("mean and std must be one-dimensional arrays of equal size")
+    if images.shape[-1] != mean.size:
+        raise ValueError(
+            f"Image has {images.shape[-1]} channels but normalization "
+            f"statistics have {mean.size}"
+        )
+    if not np.all(np.isfinite(mean)) or not np.all(np.isfinite(std)):
+        raise ValueError("mean and std must contain finite values")
+    if np.any(std <= 0):
+        raise ValueError("std values must be greater than zero")
+
+    mean = mean.reshape(1, 1, 1, -1)
+    std = std.reshape(1, 1, 1, -1)
     return (images - mean) / std
 
 
 def nhwc_to_nchw(images: np.ndarray) -> np.ndarray:
-    """Convert NHWC arrays to contiguous NCHW arrays."""
+    """Convert a rank-4 NHWC image batch to contiguous NCHW layout."""
+    images = np.asarray(images)
     if images.ndim != 4:
-        raise ValueError("Expected NHWC images with shape (N, H, W, C)")
+        raise ValueError("Expected NHWC images shaped (N, H, W, C)")
     if images.shape[-1] != 3:
-        raise ValueError("CIFAR-10 images must have exactly three channels")
+        raise ValueError("CIFAR-10 images must have three color channels")
     return np.ascontiguousarray(images.transpose(0, 3, 1, 2))
 
 
@@ -60,29 +68,32 @@ def preprocess_cifar10_nchw(
     mean: np.ndarray = CIFAR10_MEAN,
     std: np.ndarray = CIFAR10_STD,
 ) -> np.ndarray:
-    """Scale, normalize, and convert CIFAR-10 NHWC images to NCHW."""
+    """Scale, normalize, and convert CIFAR-10 uint8 images to float32 NCHW."""
     scaled = scale_to_float32(images)
     normalized = normalize_nhwc(scaled, mean=mean, std=std)
-    nchw = nhwc_to_nchw(normalized)
-    return nchw
+    return nhwc_to_nchw(normalized)
 
 
 def compute_channel_statistics(
     images: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Compute float32 channel means and standard deviations.
+    """Compute per-channel mean and standard deviation from NHWC images.
 
-    Pass only the training images. Never calculate this from test data.
+    Use training images only, not the held-out test split.
     """
-    if images.dtype == np.uint8:
-        values = images.astype(np.float32) / np.float32(255.0)
-    else:
-        values = np.asarray(images, dtype=np.float32)
+    images = np.asarray(images)
+    if images.ndim != 4 or images.shape[-1] != 3:
+        raise ValueError("Expected RGB NHWC images shaped (N, H, W, 3)")
+    if images.shape[0] == 0:
+        raise ValueError("Cannot calculate statistics for an empty dataset")
 
-    if values.ndim != 4 or values.shape[-1] != 3:
-        raise ValueError("Expected NHWC CIFAR-10 images with shape (N, 32, 32, 3)")
-    if len(values) == 0:
-        raise ValueError("Cannot compute statistics from an empty dataset")
+    if images.dtype == np.uint8:
+        values = scale_to_float32(images)
+    else:
+        values = images.astype(np.float32, copy=False)
+
+    if not np.all(np.isfinite(values)):
+        raise ValueError("Images must contain finite values")
 
     mean = values.mean(axis=(0, 1, 2), dtype=np.float32)
     std = values.std(axis=(0, 1, 2), dtype=np.float32)
