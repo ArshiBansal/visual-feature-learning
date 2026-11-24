@@ -1,0 +1,6 @@
+numpy>=1.26,<2
+matplotlib>=3.8
+pandas>=2.1
+plotly>=5.18
+streamlit>=1.36
+tensorflow>=2.16,<3

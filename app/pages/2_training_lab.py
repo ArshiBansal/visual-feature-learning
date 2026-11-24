@@ -9,7 +9,11 @@ from pathlib import Path
 import streamlit as st
 from app.components.page_header import render_page_header
 from app.services.artifacts import artifact_paths
-from app.services.training_runner import read_training_log, start_training
+from app.services.training_runner import (
+    normalize_training_history,
+    read_training_log,
+    start_training,
+)
 
 from visualization.training_3d import plot_training_trajectory_3d
 
@@ -47,7 +51,7 @@ with st.expander("Full training recipe"):
         "checkpoints are saved under `outputs/` and `checkpoints/`."
     )
 
-action, status = st.columns([1, 2], vertical_alignment="center")
+action, status = st.columns([1, 2])
 with action:
     start_clicked = st.button(
         "▶  Start baseline run",
@@ -74,8 +78,13 @@ if start_clicked:
         st.error(f"Could not start training: {error}")
 
 if paths.training_history.is_file():
-    with paths.training_history.open(encoding="utf-8") as file:
-        history = json.load(file)
+    try:
+        with paths.training_history.open(encoding="utf-8") as file:
+            history = normalize_training_history(json.load(file))
+    except (OSError, json.JSONDecodeError, ValueError) as error:
+        history = None
+        st.error(f"Could not read training history: {error}")
+
     if history:
         latest = history[-1]
         progress = st.columns(3)
@@ -95,7 +104,7 @@ if paths.training_history.is_file():
         )
         with st.expander("Exact epoch metrics"):
             st.dataframe(history, use_container_width=True, hide_index=True)
-    else:
+    elif history is not None:
         st.warning("The training history file is empty. Run training to populate it.")
 else:
     st.info(
