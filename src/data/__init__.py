@@ -15,6 +15,7 @@ from .preprocessing import (
     compute_channel_statistics,
     nhwc_to_nchw,
     normalize_nhwc,
+    prepare_cifar10_batch,
     preprocess_cifar10_nchw,
     scale_to_float32,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "load_cifar10",
     "nhwc_to_nchw",
     "normalize_nhwc",
+    "prepare_cifar10_batch",
     "preprocess_cifar10_nchw",
     "scale_to_float32",
     "validate_cifar10_split",

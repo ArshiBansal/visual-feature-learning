@@ -76,6 +76,14 @@ def preprocess_cifar10_nchw(
     return nhwc_to_nchw(normalized)
 
 
+def prepare_cifar10_batch(images: np.ndarray) -> np.ndarray:
+    """Preprocess raw CIFAR-10 batches while preserving model-ready inputs."""
+    images = np.asarray(images)
+    if images.dtype == np.uint8 and images.ndim == 4 and images.shape[-1] == 3:
+        return preprocess_cifar10_nchw(images)
+    return images
+
+
 def compute_channel_statistics(
     images: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
