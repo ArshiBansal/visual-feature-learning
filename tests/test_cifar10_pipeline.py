@@ -18,6 +18,7 @@ from data.preprocessing import (
     compute_channel_statistics,
     nhwc_to_nchw,
     normalize_nhwc,
+    prepare_cifar10_batch,
     preprocess_cifar10_nchw,
     scale_to_float32,
 )
@@ -93,6 +94,18 @@ def test_preprocess_cifar10_nchw():
     assert preprocessed.dtype == np.float32
     expected = (-CIFAR10_MEAN / CIFAR10_STD).reshape(1, 3, 1, 1)
     np.testing.assert_allclose(preprocessed, np.broadcast_to(expected, preprocessed.shape))
+
+
+def test_prepare_cifar10_batch_preprocesses_raw_and_preserves_model_ready_data():
+    raw_images = np.zeros((2, 32, 32, 3), dtype=np.uint8)
+    model_ready = np.zeros((2, 3, 32, 32), dtype=np.float32)
+
+    preprocessed = prepare_cifar10_batch(raw_images)
+    preserved = prepare_cifar10_batch(model_ready)
+
+    assert preprocessed.shape == (2, 3, 32, 32)
+    assert preprocessed.dtype == np.float32
+    assert preserved is model_ready
 
 
 def test_validate_cifar10_split_accepts_official_shapes():
