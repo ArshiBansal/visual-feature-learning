@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from data.preprocessing import prepare_cifar10_batch
+
 from .loss import cross_entropy_with_logits
 from .optimizer import SGD
 
@@ -60,6 +62,7 @@ class Trainer:
                 flip_mask = rng.random(len(batch_x)) < 0.5
                 batch_x[flip_mask] = batch_x[flip_mask, :, :, ::-1]
 
+            batch_x = prepare_cifar10_batch(batch_x)
             logits = self.model.forward(batch_x)
             loss, d_logits = cross_entropy_with_logits(logits, batch_y)
             gradients = self.model.backward(d_logits)
@@ -108,6 +111,7 @@ class Trainer:
         for start in range(0, len(x), batch_size):
             batch_x = np.asarray(x[start : start + batch_size])
             batch_y = np.asarray(y[start : start + batch_size])
+            batch_x = prepare_cifar10_batch(batch_x)
             logits = self.model.forward(batch_x)
             loss, _ = cross_entropy_with_logits(logits.copy(), batch_y)
             predictions = logits.argmax(axis=1)
