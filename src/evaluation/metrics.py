@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 
+from data.preprocessing import prepare_cifar10_batch
 from training.loss import cross_entropy_with_logits
 
 
@@ -72,6 +73,7 @@ def evaluate_model(
     for start in range(0, len(x), batch_size):
         batch_x = x[start : start + batch_size]
         batch_y = y[start : start + batch_size]
+        batch_x = prepare_cifar10_batch(batch_x)
         logits = model.forward(batch_x)
         loss, _ = cross_entropy_with_logits(logits.copy(), batch_y)
         predictions = logits.argmax(axis=1)
