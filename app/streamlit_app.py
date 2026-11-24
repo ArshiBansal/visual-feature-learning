@@ -1,117 +1,56 @@
-"""Streamlit entry point for the visual feature learning project."""
+"""Entrypoint and branded navigation shell for the visual learning lab."""
 
 from __future__ import annotations
 
-import json
+import sys
 from pathlib import Path
 
 import streamlit as st
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PATH = PROJECT_ROOT / "configs" / "cifar10_baseline.json"
-METRICS_PATH = PROJECT_ROOT / "outputs" / "cifar10_baseline" / "final_metrics.json"
-HISTORY_PATH = PROJECT_ROOT / "outputs" / "cifar10_baseline" / "training_history.json"
-CHECKPOINT_PATH = (
-    PROJECT_ROOT
-    / "checkpoints"
-    / "cifar10_baseline"
-    / "cifar10_cnn_latest.npz"
-)
+APP_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = APP_ROOT.parent
+SRC_ROOT = PROJECT_ROOT / "src"
+for import_root in (APP_ROOT, SRC_ROOT):
+    if str(import_root) not in sys.path:
+        sys.path.insert(0, str(import_root))
 
-
-def _metrics_are_current() -> bool:
-    if not METRICS_PATH.is_file() or not CHECKPOINT_PATH.is_file():
-        return False
-
-    return METRICS_PATH.stat().st_mtime_ns >= CHECKPOINT_PATH.stat().st_mtime_ns
-
+from navigation import create_pages  # noqa: E402
 
 st.set_page_config(
-    page_title="Visual Feature Learning",
+    page_title="Visual Learning Lab",
     page_icon="🧠",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("Visual Feature Learning")
-st.caption("Pure-NumPy CIFAR-10 convolutional neural network")
+theme_css = (APP_ROOT / "theme" / "styles.css").read_text(encoding="utf-8")
+st.markdown(f"<style>{theme_css}</style>", unsafe_allow_html=True)
 
-with CONFIG_PATH.open(encoding="utf-8") as file:
-    config = json.load(file)
-
-left, center, right = st.columns(3)
-left.metric("Dataset", "CIFAR-10")
-center.metric("Training samples", f"{config['dataset']['expected_train_samples']:,}")
-right.metric("Test samples", f"{config['dataset']['expected_test_samples']:,}")
-
-st.divider()
-
-overview_left, overview_right = st.columns(2)
-
-with overview_left:
-    st.subheader("Project overview")
+navigation_groups, all_pages = create_pages()
+with st.sidebar:
     st.markdown(
         """
-        This project implements and inspects a two-stage convolutional neural
-        network using NumPy. It uses the official CIFAR-10 training and test
-        splits, NCHW image tensors, and a pure NumPy forward/backward pass.
-
-        Use the sidebar to open:
-        - **Train and Compare** for baseline training and ablation results
-        - **Explore Feature Maps** for learned filters and activations
-        - **Results and Analysis** for test metrics and the confusion matrix
-        """
+        <div style="padding:.4rem .2rem 1.1rem">
+          <div style="font-size:1.55rem;font-weight:800;color:#edf4ff">
+            ◈ VISUAL LEARNING LAB
+          </div>
+          <div style="font-size:.78rem;color:#9aacc5;margin-top:.25rem">
+            CIFAR-10 · NUMPY CNN
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    for group, pages in navigation_groups.items():
+        st.caption(group.upper())
+        for page in pages:
+            st.page_link(page, label=page.title, icon=page.icon)
+    st.divider()
+    st.markdown("**A model you can see inside.**")
+    st.caption(
+        "Train from scratch, follow learned features, and inspect every result "
+        "through interactive 3D views."
     )
 
-with overview_right:
-    st.subheader("Artifact status")
-    st.write(
-        "Training history:",
-        "ready" if HISTORY_PATH.is_file() else "not generated",
-    )
-    st.write(
-        "Latest checkpoint:",
-        "ready" if CHECKPOINT_PATH.is_file() else "not generated",
-    )
-
-    metrics_current = _metrics_are_current()
-    if metrics_current:
-        metrics_status = "current"
-    elif METRICS_PATH.is_file():
-        metrics_status = "stale — rerun evaluation"
-    else:
-        metrics_status = "not generated"
-
-    st.write("Final metrics:", metrics_status)
-
-st.divider()
-
-if _metrics_are_current():
-    with METRICS_PATH.open(encoding="utf-8") as file:
-        metrics = json.load(file)
-
-    st.subheader("Latest evaluated checkpoint metrics")
-    metric_columns = st.columns(3)
-    metric_columns[0].metric(
-        "Test accuracy",
-        f"{float(metrics['test_accuracy']):.2%}",
-    )
-    metric_columns[1].metric(
-        "Test loss",
-        f"{float(metrics['test_loss']):.4f}",
-    )
-    metric_columns[2].metric(
-        "Parameters",
-        f"{int(metrics['parameter_count']):,}",
-    )
-elif METRICS_PATH.is_file():
-    st.warning(
-        "The checkpoint has changed since these metrics were generated. "
-        "Run `python scripts/evaluate.py` to refresh them."
-    )
-else:
-    st.info(
-        "Train and evaluate the baseline to populate final metrics. "
-        "Run `python scripts/train.py`, then `python scripts/evaluate.py`."
-    )
-
-st.caption("Configuration: `configs/cifar10_baseline.json`")
+active_page = st.navigation(navigation_groups, position="hidden")
+active_page.run()
