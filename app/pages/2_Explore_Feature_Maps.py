@@ -62,7 +62,7 @@ def _load_checkpoint(
 @st.cache_data
 def _load_test_data() -> tuple[np.ndarray, np.ndarray]:
     (_, _), (images, labels) = load_cifar10()
-    return preprocess_cifar10_nchw(images), labels
+    return images, labels
 
 
 st.set_page_config(
@@ -157,9 +157,11 @@ with activation_tab:
         len(test_images) - 1,
         0,
     )
-    image = test_images[sample_index : sample_index + 1]
+    image = preprocess_cifar10_nchw(
+        test_images[sample_index : sample_index + 1]
+    )
 
-    st.caption(f"Actual class: {class_names[int(y_test[sample_index])]}")
+    st.caption(f"Actual class: {class_names[int(y_test[sample_index])]}" )
 
     conv1_output, _ = conv2d_forward(
         image,

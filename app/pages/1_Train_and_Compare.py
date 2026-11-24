@@ -209,4 +209,7 @@ with ablation_tab:
         )
         st.plotly_chart(figure, use_container_width=True)
 
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(
+            df,
+            use_container_width=True,
+        )
