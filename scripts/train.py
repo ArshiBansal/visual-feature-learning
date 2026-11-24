@@ -18,7 +18,7 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data.cifar10 import load_cifar10
-from data.preprocessing import preprocess_cifar10_nchw
+from data.preprocessing import CIFAR10_MEAN, CIFAR10_STD, preprocess_cifar10_nchw
 from models.cnn import CIFAR10CNN, cross_entropy_with_logits
 from models.config import build_cifar10_cnn
 
@@ -82,6 +82,8 @@ def train_one_epoch(
     log_every: int,
     shuffle_each_epoch: bool,
     drop_last_batch: bool,
+    mean: np.ndarray = CIFAR10_MEAN,
+    std: np.ndarray = CIFAR10_STD,
 ) -> dict[str, float]:
     if batch_size <= 0:
         raise ValueError("batch_size must be positive")
@@ -122,7 +124,7 @@ def train_one_epoch(
             flip_mask = rng.random(len(batch_x)) < 0.5
             batch_x[flip_mask] = batch_x[flip_mask, :, :, ::-1]
 
-        batch_x = preprocess_cifar10_nchw(batch_x)
+        batch_x = preprocess_cifar10_nchw(batch_x, mean=mean, std=std)
         logits = model.forward(batch_x)
         loss, d_logits = cross_entropy_with_logits(logits, batch_y)
         gradients = model.backward(d_logits)
@@ -168,6 +170,7 @@ def main() -> None:
 
     seed = _require_int(config["project"]["seed"], "project.seed")
     dataset_config = config["dataset"]
+    normalization_config = dataset_config["normalization"]
     training_config = config["training"]
     optimizer_config = training_config["optimizer"]
     schedule_config = training_config["learning_rate_schedule"]
@@ -206,6 +209,14 @@ def main() -> None:
     horizontal_flip = _require_bool(
         dataset_config["augmentation"]["horizontal_flip"],
         "dataset.augmentation.horizontal_flip",
+    )
+    normalization_mean = np.asarray(
+        normalization_config["mean"],
+        dtype=np.float32,
+    )
+    normalization_std = np.asarray(
+        normalization_config["std"],
+        dtype=np.float32,
     )
 
     (x_train, y_train), (_, _) = load_cifar10()
@@ -280,6 +291,8 @@ def main() -> None:
             log_every=log_every,
             shuffle_each_epoch=shuffle_each_epoch,
             drop_last_batch=drop_last_batch,
+            mean=normalization_mean,
+            std=normalization_std,
         )
 
         history["epoch"].append(epoch)

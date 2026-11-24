@@ -16,7 +16,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from data.cifar10 import load_cifar10
-from data.preprocessing import preprocess_cifar10_nchw
 from evaluation.metrics import evaluate_model
 from models.cnn import CIFAR10CNN
 from models.config import build_cifar10_cnn
@@ -112,22 +111,13 @@ def load_checkpoint(model: CIFAR10CNN, path: Path) -> None:
         ).astype(np.float32)
 
 
-class _PreprocessedModel:
-    """Apply the notebook's image preprocessing before each model batch."""
-
-    def __init__(self, model: CIFAR10CNN) -> None:
-        self.model = model
-
-    def forward(self, images: np.ndarray) -> np.ndarray:
-        return self.model.forward(preprocess_cifar10_nchw(images))
-
-
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
 
     seed = _require_int(config["project"]["seed"], "project.seed")
     dataset_config = config["dataset"]
+    normalization_config = dataset_config["normalization"]
     training_config = config["training"]
     class_names = dataset_config["class_names"]
     num_classes = _require_int(
@@ -144,6 +134,14 @@ def main() -> None:
     )
     epochs = _require_int(training_config["epochs"], "training.epochs")
     batch_size = _require_int(training_config["batch_size"], "training.batch_size")
+    normalization_mean = np.asarray(
+        normalization_config["mean"],
+        dtype=np.float32,
+    )
+    normalization_std = np.asarray(
+        normalization_config["std"],
+        dtype=np.float32,
+    )
 
     if len(class_names) != num_classes:
         raise ValueError("class_names length must match dataset num_classes")
@@ -169,11 +167,13 @@ def main() -> None:
     load_checkpoint(model, checkpoint)
 
     result: dict[str, Any] = evaluate_model(
-        model=_PreprocessedModel(model),
+        model=model,
         x=x_test,
         y=y_test,
         batch_size=batch_size,
         num_classes=num_classes,
+        mean=normalization_mean,
+        std=normalization_std,
     )
 
     print(f"Test loss:     {result['loss']:.4f}")

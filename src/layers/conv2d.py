@@ -25,7 +25,9 @@ def _padding_for_conv(height, width, kernel_height, kernel_width, stride, paddin
         if padding == "valid":
             return 0, 0, 0, 0
         if padding != "same":
-            raise ValueError("padding must be 'valid', 'same', an int, or a pair")
+            raise ValueError(
+                "padding must be 'valid', 'same', an int, a pair, or a four-value tuple"
+            )
 
         output_height = (height + stride - 1) // stride
         output_width = (width + stride - 1) // stride
@@ -60,7 +62,17 @@ def _padding_for_conv(height, width, kernel_height, kernel_width, stride, paddin
             raise ValueError("padding values must be non-negative integers")
         return pad_height, pad_height, pad_width, pad_width
 
-    raise TypeError("padding must be 'valid', 'same', an int, or a pair")
+    if isinstance(padding, tuple) and len(padding) == 4:
+        if any(
+            not isinstance(item, int) or isinstance(item, bool) or item < 0
+            for item in padding
+        ):
+            raise ValueError("padding values must be non-negative integers")
+        return padding
+
+    raise TypeError(
+        "padding must be 'valid', 'same', an int, a pair, or a four-value tuple"
+    )
 
 
 def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
@@ -71,7 +83,8 @@ def conv2d_forward(x, weights, bias, stride=1, padding="valid"):
         weights: Filters shaped (C_out, C_in, K_h, K_w).
         bias: Bias vector shaped (C_out,).
         stride: Positive integer stride.
-        padding: 'valid', 'same', a non-negative integer, or (height, width).
+        padding: 'valid', 'same', a non-negative integer, (height, width),
+            or (top, bottom, left, right).
 
     Returns:
         The output tensor and a cache for conv2d_backward.

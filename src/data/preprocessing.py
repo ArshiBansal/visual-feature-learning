@@ -76,11 +76,15 @@ def preprocess_cifar10_nchw(
     return nhwc_to_nchw(normalized)
 
 
-def prepare_cifar10_batch(images: np.ndarray) -> np.ndarray:
+def prepare_cifar10_batch(
+    images: np.ndarray,
+    mean: np.ndarray = CIFAR10_MEAN,
+    std: np.ndarray = CIFAR10_STD,
+) -> np.ndarray:
     """Preprocess raw CIFAR-10 batches while preserving model-ready inputs."""
     images = np.asarray(images)
     if images.dtype == np.uint8 and images.ndim == 4 and images.shape[-1] == 3:
-        return preprocess_cifar10_nchw(images)
+        return preprocess_cifar10_nchw(images, mean=mean, std=std)
     return images
 
 

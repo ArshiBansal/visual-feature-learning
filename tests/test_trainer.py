@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scripts.train import train_one_epoch as train_script_one_epoch
 
 from data.preprocessing import preprocess_cifar10_nchw
 from evaluation.metrics import evaluate_model
@@ -37,6 +38,9 @@ class TrainingRecordingModel(RecordingModel):
             "conv2": (None, None),
             "dense": (None, None),
         }
+
+    def update(self, gradients, learning_rate, momentum, weight_decay):
+        pass
 
 
 class NoOpOptimizer:
@@ -105,6 +109,61 @@ def test_evaluate_model_preprocesses_each_raw_cifar10_batch():
     assert [len(batch) for batch in model.batches] == [2, 1]
     np.testing.assert_array_equal(model.batches[0], preprocess_cifar10_nchw(x[:2]))
     np.testing.assert_array_equal(model.batches[1], preprocess_cifar10_nchw(x[2:]))
+
+
+def test_evaluate_model_uses_configured_normalization():
+    model = RecordingModel()
+    x = np.zeros((2, 32, 32, 3), dtype=np.uint8)
+    y = np.zeros(2, dtype=np.int64)
+    mean = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+    std = np.array([0.5, 0.6, 0.7], dtype=np.float32)
+
+    evaluate_model(
+        model,
+        x,
+        y,
+        batch_size=2,
+        num_classes=2,
+        mean=mean,
+        std=std,
+    )
+
+    expected = np.broadcast_to(
+        (-mean / std).reshape(1, 3, 1, 1),
+        (2, 3, 32, 32),
+    )
+    np.testing.assert_allclose(model.batches[0], expected)
+
+
+def test_train_script_uses_configured_normalization():
+    model = TrainingRecordingModel()
+    x = np.zeros((2, 32, 32, 3), dtype=np.uint8)
+    y = np.zeros(2, dtype=np.int64)
+    mean = np.array([0.1, 0.2, 0.3], dtype=np.float32)
+    std = np.array([0.5, 0.6, 0.7], dtype=np.float32)
+
+    train_script_one_epoch(
+        model=model,
+        x=x,
+        y=y,
+        batch_size=2,
+        learning_rate=0.0,
+        momentum=0.0,
+        weight_decay=0.0,
+        rng=np.random.default_rng(42),
+        horizontal_flip=False,
+        log_every=0,
+        shuffle_each_epoch=False,
+        drop_last_batch=False,
+        mean=mean,
+        std=std,
+    )
+
+    expected = np.broadcast_to(
+        (-mean / std).reshape(1, 3, 1, 1),
+        (2, 3, 32, 32),
+    )
+    np.testing.assert_allclose(model.batches[0], expected)
 
 
 def test_evaluate_rejects_empty_data(tmp_path):

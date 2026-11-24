@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from data.preprocessing import prepare_cifar10_batch
+from data.preprocessing import CIFAR10_MEAN, CIFAR10_STD, prepare_cifar10_batch
 from training.loss import cross_entropy_with_logits
 
 
@@ -50,6 +50,8 @@ def evaluate_model(
     y: np.ndarray,
     batch_size: int,
     num_classes: int,
+    mean: np.ndarray = CIFAR10_MEAN,
+    std: np.ndarray = CIFAR10_STD,
 ) -> dict[str, Any]:
     """Evaluate loss, accuracy, and a row-major true/predicted confusion matrix."""
     x = np.asarray(x)
@@ -73,7 +75,7 @@ def evaluate_model(
     for start in range(0, len(x), batch_size):
         batch_x = x[start : start + batch_size]
         batch_y = y[start : start + batch_size]
-        batch_x = prepare_cifar10_batch(batch_x)
+        batch_x = prepare_cifar10_batch(batch_x, mean=mean, std=std)
         logits = model.forward(batch_x)
         loss, _ = cross_entropy_with_logits(logits.copy(), batch_y)
         predictions = logits.argmax(axis=1)
