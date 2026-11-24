@@ -122,6 +122,7 @@ def train_one_epoch(
             flip_mask = rng.random(len(batch_x)) < 0.5
             batch_x[flip_mask] = batch_x[flip_mask, :, :, ::-1]
 
+        batch_x = preprocess_cifar10_nchw(batch_x)
         logits = model.forward(batch_x)
         loss, d_logits = cross_entropy_with_logits(logits, batch_y)
         gradients = model.backward(d_logits)
@@ -181,6 +182,10 @@ def main() -> None:
 
     epochs = _require_int(training_config["epochs"], "training.epochs")
     batch_size = _require_int(training_config["batch_size"], "training.batch_size")
+    expected_train_samples = _require_int(
+        dataset_config["expected_train_samples"],
+        "dataset.expected_train_samples",
+    )
     if epochs <= 0:
         raise ValueError("training.epochs must be positive")
     if batch_size <= 0:
@@ -203,10 +208,8 @@ def main() -> None:
         "dataset.augmentation.horizontal_flip",
     )
 
-    (x_train_raw, y_train), (_, _) = load_cifar10()
-    x_train = preprocess_cifar10_nchw(x_train_raw)
-
-    if len(x_train) != dataset_config["expected_train_samples"]:
+    (x_train, y_train), (_, _) = load_cifar10()
+    if len(x_train) != expected_train_samples:
         raise ValueError("Unexpected CIFAR-10 training split size")
 
     rng = np.random.default_rng(seed)

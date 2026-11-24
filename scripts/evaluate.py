@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -111,6 +112,16 @@ def load_checkpoint(model: CIFAR10CNN, path: Path) -> None:
         ).astype(np.float32)
 
 
+class _PreprocessedModel:
+    """Apply the notebook's image preprocessing before each model batch."""
+
+    def __init__(self, model: CIFAR10CNN) -> None:
+        self.model = model
+
+    def forward(self, images: np.ndarray) -> np.ndarray:
+        return self.model.forward(preprocess_cifar10_nchw(images))
+
+
 def main() -> None:
     args = parse_args()
     config = load_config(args.config)
@@ -123,17 +134,29 @@ def main() -> None:
         dataset_config["num_classes"],
         "dataset.num_classes",
     )
-
-    if len(class_names) != num_classes:
-        raise ValueError("class_names length must match dataset num_classes")
-
-    (_, _), (x_test_raw, y_test) = load_cifar10()
-    x_test = preprocess_cifar10_nchw(x_test_raw)
-
+    expected_train_samples = _require_int(
+        dataset_config["expected_train_samples"],
+        "dataset.expected_train_samples",
+    )
     expected_test_samples = _require_int(
         dataset_config["expected_test_samples"],
         "dataset.expected_test_samples",
     )
+    epochs = _require_int(training_config["epochs"], "training.epochs")
+    batch_size = _require_int(training_config["batch_size"], "training.batch_size")
+
+    if len(class_names) != num_classes:
+        raise ValueError("class_names length must match dataset num_classes")
+    if expected_train_samples <= 0:
+        raise ValueError("dataset.expected_train_samples must be positive")
+    if expected_test_samples <= 0:
+        raise ValueError("dataset.expected_test_samples must be positive")
+    if epochs <= 0:
+        raise ValueError("training.epochs must be positive")
+    if batch_size <= 0:
+        raise ValueError("training.batch_size must be positive")
+
+    (_, _), (x_test, y_test) = load_cifar10()
     if len(x_test) != expected_test_samples:
         raise ValueError("Unexpected CIFAR-10 test split size")
 
@@ -145,14 +168,11 @@ def main() -> None:
     checkpoint = args.checkpoint or checkpoint_dir / "cifar10_cnn_latest.npz"
     load_checkpoint(model, checkpoint)
 
-    result = evaluate_model(
-        model=model,
+    result: dict[str, Any] = evaluate_model(
+        model=_PreprocessedModel(model),
         x=x_test,
         y=y_test,
-        batch_size=_require_int(
-            training_config["batch_size"],
-            "training.batch_size",
-        ),
+        batch_size=batch_size,
         num_classes=num_classes,
     )
 
@@ -180,8 +200,10 @@ def main() -> None:
             )
         },
         "confusion_matrix": result["confusion_matrix"].tolist(),
+        "train_samples": expected_train_samples,
         "test_samples": len(x_test),
-        "batch_size": int(training_config["batch_size"]),
+        "epochs": epochs,
+        "batch_size": batch_size,
         "parameter_count": model.parameter_count(),
     }
 
